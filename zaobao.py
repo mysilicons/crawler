@@ -1,4 +1,8 @@
 import base64
+import os
+import random
+import time
+
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
@@ -33,7 +37,7 @@ def fetch_latest_news(url, target_date):
                 '日期': date,
                 '内容': content
             })
-
+        time.sleep(random.uniform(1, 3))
     return news_list
 
 
@@ -77,3 +81,5 @@ for news in news_list:
     print(f"日期: {news['日期']}")
     print(f"内容: {news['内容']}")
     print("\n" + "=" * 150 + "\n")
+
+os.system('pause')
