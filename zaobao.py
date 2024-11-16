@@ -1,6 +1,7 @@
 import base64
 import os
 import random
+import textwrap
 import time
 
 import requests
@@ -79,7 +80,13 @@ for news in news_list:
     print(f"标题: {news['标题']}")
     print(f"链接: {news['链接']}")
     print(f"日期: {news['日期']}")
-    print(f"内容: {news['内容']}")
+    print("内容:")
+
+    # 使用 TextWrapper 控制每行宽度并避免提前换行
+    wrapper = textwrap.TextWrapper(width=80)
+    wrapped_content = wrapper.fill(news['内容'])
+    print(wrapped_content)
+
     print("\n" + "=" * 150 + "\n")
 
 os.system('pause')
