@@ -2,11 +2,11 @@ import os
 import datetime
 import requests
 from bs4 import BeautifulSoup
-import PyPDF2
 import time
 import logging
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+import pikepdf
 
 # 配置日志
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(message)s")
@@ -90,15 +90,20 @@ def merge_pdfs(date):
     folder = os.path.join("PDF_Download", date)
     file_list = sorted(os.listdir(folder))  # 按文件名排序，确保按顺序合并
 
-    pdf_merger = PyPDF2.PdfMerger(strict=False)
-    for file in file_list:
-        file_path = os.path.join(folder, file)
-        pdf_merger.append(file_path)
-
     output_pdf = f"人民日报{date}.pdf"
-    with open(output_pdf, 'wb') as output_file:
-        pdf_merger.write(output_file)
-    logging.info(f"合并 PDF 成功，保存为 {output_pdf}")
+
+    try:
+        pdf_output = pikepdf.Pdf.new()  # 创建新的 PDF
+        for file in file_list:
+            file_path = os.path.join(folder, file)
+            with pikepdf.open(file_path) as pdf:
+                pdf_output.pages.extend(pdf.pages)  # 合并页面
+        pdf_output.save(output_pdf)
+        logging.info(f"合并 PDF 成功，保存为 {output_pdf}")
+    except Exception as e:
+        logging.error(f"合并 PDF 异常: {e}")
+    finally:
+        pdf_output.close()
 
 
 # 删除下载的PDF文件
@@ -106,8 +111,17 @@ def delete_pdfs(date):
     folder = os.path.join("PDF_Download", date)
     for file in os.listdir(folder):
         file_path = os.path.join(folder, file)
+        print(f"删除文件: {file_path}")
         os.remove(file_path)
     os.rmdir(folder)
+
+
+# 检查文件是否存在
+def check_file_exist(date):
+    folder = os.path.join("PDF_Download", date)
+    if os.path.exists(folder):
+        return True
+    return False
 
 
 # 主程序
@@ -119,7 +133,7 @@ def main():
     print("{:<40}".format("版本：v2.0"))
     print("{:=^40}".format(""))
 
-    choice = input("[1] 批量下载\n[2] 当日下载\n请输入选项: ")
+    choice = input("[1] 批量下载\n[2] 当日下载\n[3] 指定日期下载\n请输入选项: ")
 
     if choice == '1':
         try:
@@ -132,25 +146,58 @@ def main():
 
         for date in time_list:
             date_str = date.strftime("%Y%m%d")
-            logging.info(f"开始下载日期: {date_str}")
-            html, url = get_html(date_str)
-            flag = 0 if date < datetime.datetime(2020, 7, 1) else 1
-            pdf_url, pdf_num = parse_page(html, flag)
-            save_pdf(pdf_url, pdf_num, date_str)
-            merge_pdfs(date_str)
-            delete_pdfs(date_str)
+            if check_file_exist(date_str):
+                logging.info(f"文件夹已存在，跳过下载日期: {date_str}")
+            else:
+                logging.info(f"开始下载日期: {date_str}")
+                html, url = get_html(date_str)
+                flag = 0 if date < datetime.datetime(2020, 7, 1) else 1
+                pdf_url, pdf_num = parse_page(html, flag)
+                save_pdf(pdf_url, pdf_num, date_str)
+                merge_pdfs(date_str)
 
     elif choice == '2':
         date_str = time.strftime('%Y%m%d', time.localtime())
-        logging.info(f"开始下载今日 PDF: {date_str}")
-        html, url = get_html(date_str)
-        flag = 1
-        pdf_url, pdf_num = parse_page(html, flag)
-        save_pdf(pdf_url, pdf_num, date_str)
-        merge_pdfs(date_str)
+        if check_file_exist(date_str):
+            logging.info(f"文件夹已存在，跳过下载今日 PDF: {date_str}")
+        else:
+            logging.info(f"开始下载今日 PDF: {date_str}")
+            html, url = get_html(date_str)
+            flag = 1
+            pdf_url, pdf_num = parse_page(html, flag)
+            save_pdf(pdf_url, pdf_num, date_str)
+            merge_pdfs(date_str)
+
+    elif choice == '3':
+        date_str = input("请输入日期，如“20210101”：")
+        if check_file_exist(date_str):
+            logging.info(f"文件夹已存在，跳过下载日期: {date_str}")
+        else:
+            logging.info(f"开始下载日期: {date_str}")
+            html, url = get_html(date_str)
+            flag = 0 if datetime.datetime.strptime(date_str, "%Y%m%d") < datetime.datetime(2020, 7, 1) else 1
+            pdf_url, pdf_num = parse_page(html, flag)
+            save_pdf(pdf_url, pdf_num, date_str)
+            merge_pdfs(date_str)
 
     else:
-        logging.error("无效选项，请选择[1] 或 [2]")
+        logging.error("无效选项，程序退出")
+        os.system("pause")
+
+    print("{:=^40}".format(""))
+    # 删除下载的PDF文件
+    delete = input("是否删除下载的PDF文件？(Y/N): ")
+    if delete.lower() == 'y':
+        if choice == '1':
+            for date in time_list:
+                date_str = date.strftime("%Y%m%d")
+                delete_pdfs(date_str)
+        elif choice == '2':
+            delete_pdfs(date_str)
+        elif choice == '3':
+            delete_pdfs(date_str)
+        print("删除完成")
+    os.system("pause")
 
 
 if __name__ == "__main__":
